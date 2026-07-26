@@ -8,6 +8,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "web": "expo start --web",
+    "build": "expo export -p web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
