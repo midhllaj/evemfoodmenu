@@ -103,9 +103,19 @@ export function buildQuotationHtml(
           font-weight: 900;
           color: #073F35;
           letter-spacing: 2px;
-          text-decoration: underline;
-          text-underline-offset: 6px;
-          text-decoration-color: #073F35;
+          padding-bottom: 4px;
+          border-bottom: 3px solid #073F35;
+          position: relative;
+          display: inline-block;
+        }
+        .doc-title::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          bottom: -6px;
+          width: 100%;
+          height: 1.5px;
+          background-color: #C9A227;
         }
         .header-right {
           display: flex;
@@ -299,11 +309,13 @@ export async function downloadQuotationPdf(
     // ── Letterhead header ──────────────────────────────────────────
     const headerTop = 790;
 
-    // Left: "FOOD MENU" large italic underlined
+    // Left: "FOOD MENU" large italic
     const italic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
     page.drawText("FOOD MENU", { x: 58, y: headerTop - 30, size: 28, font: italic, color: emerald });
-    // Underline beneath the title
-    page.drawLine({ start: { x: 58, y: headerTop - 36 }, end: { x: 195, y: headerTop - 36 }, thickness: 1.2, color: emerald });
+    // Underline beneath the title (thick green)
+    page.drawLine({ start: { x: 58, y: headerTop - 38 }, end: { x: 235, y: headerTop - 38 }, thickness: 2, color: emerald });
+    // Secondary thin line (gold)
+    page.drawLine({ start: { x: 58, y: headerTop - 42 }, end: { x: 235, y: headerTop - 42 }, thickness: 1, color: gold });
 
     // Right: logo, then company details stacked
     const logoX = 537 - logoDims.width;
