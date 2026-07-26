@@ -1,0 +1,7 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+*.err.log
+assets/logo_b64.txt

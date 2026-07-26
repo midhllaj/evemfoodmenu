@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Evam Quotations",
+    "slug": "evam-catering-quotation",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "evamquote",
+    "android": {
+      "package": "com.evam.quotations",
+      "adaptiveIcon": {
+        "backgroundColor": "#F9F7F0"
+      }
+    }
+  }
+}
