@@ -8,7 +8,7 @@ import { categories } from "../data/seed";
 import { AppTheme } from "../theme/theme";
 import { Dish, Heading, SelectedDish } from "../types";
 import { makeId } from "../utils/id";
-import { generatePdfBytes } from "../utils/pdf";
+import { generatePdfBytes, buildQuotationHtml } from "../utils/pdf";
 import { store } from "../storage/store";
 
 type Props = {
@@ -122,17 +122,92 @@ export function BuilderScreen({
     if (!pdfUri) return;
     try {
       if (Platform.OS === "web") {
-        // For web, open the HTML in a new window and trigger print dialog
-        const printWindow = window.open(pdfUri, '_blank');
-        if (printWindow) {
-          printWindow.addEventListener('load', () => {
-            setTimeout(() => {
-              printWindow.print();
-            }, 300);
-          });
-        } else {
-          Alert.alert("Popup blocked", "Please allow popups to download the PDF. You can also right-click and select 'Print' then 'Save as PDF'.");
+        // For web, generate PDF using html2canvas and jsPDF
+        const html2canvas = (await import("html2canvas")).default;
+        const jsPDF = (await import("jspdf")).default;
+        
+        // Create a temporary container to render the HTML
+        const container = document.createElement("div");
+        container.style.position = "absolute";
+        container.style.left = "-9999px";
+        container.style.top = "0";
+        container.style.width = "595px";
+        document.body.appendChild(container);
+        
+        // Fetch and render the HTML
+        const response = await fetch(pdfUri);
+        const htmlContent = await response.text();
+        container.innerHTML = htmlContent;
+        
+        // Wait for images to load
+        const images = container.getElementsByTagName("img");
+        await Promise.all(
+          Array.from(images).map(
+            (img) =>
+              new Promise((resolve) => {
+                if (img.complete) {
+                  resolve(null);
+                } else {
+                  img.onload = () => resolve(null);
+                  img.onerror = () => resolve(null);
+                }
+              })
+          )
+        );
+        
+        // Generate canvas from HTML
+        const canvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          width: 595,
+          windowWidth: 595
+        });
+        
+        // A4 dimensions in pixels at 72 DPI
+        const a4Width = 595;
+        const a4Height = 842;
+        
+        // Create PDF with A4 dimensions
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "px",
+          format: [a4Width, a4Height]
+        });
+        
+        const imgData = canvas.toDataURL("image/png");
+        const imgWidth = a4Width;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        
+        let heightLeft = imgHeight;
+        let position = 0;
+        let pageCount = 0;
+        
+        // Add first page
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= a4Height;
+        
+        // Add additional pages if content is longer than one A4 page
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+          heightLeft -= a4Height;
+          pageCount++;
         }
+        
+        // Clean up
+        document.body.removeChild(container);
+        
+        // Get filename from customer details
+        const fileName = `${customer.customerName || customer.eventName || "evam-quotation"}`
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "") || "evam-quotation";
+        
+        // Download the PDF
+        pdf.save(`${fileName}.pdf`);
+        Alert.alert("Success", "PDF downloaded successfully!");
       } else {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(pdfUri, {
@@ -143,6 +218,7 @@ export function BuilderScreen({
         }
       }
     } catch (error) {
+      console.error("Download error:", error);
       Alert.alert("Download failed", error instanceof Error ? error.message : "Could not download PDF.");
     }
   }
@@ -518,7 +594,8 @@ export function BuilderScreen({
                     width: "100%", 
                     height: "100%",
                     border: "none", 
-                    backgroundColor: "#f5f5f5"
+                    backgroundColor: "#F9F7F0",
+                    overflow: "auto"
                   }}
                   title="PDF Preview"
                 />

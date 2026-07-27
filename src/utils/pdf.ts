@@ -55,46 +55,54 @@ export function buildQuotationHtml(
   <html>
     <head>
       <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
         * {
           box-sizing: border-box;
         }
         @page { 
           size: A4 portrait; 
-          margin: 0; 
+          margin: 0;
         }
-        html, body {
+        html {
           margin: 0;
           padding: 0;
-          width: 595px;
+          background: #F9F7F0;
+        }
+        body {
+          margin: 0;
+          padding: 0;
           background: #F9F7F0;
           color: #073F35;
           font-family: Georgia, "Times New Roman", serif;
+          width: 595px;
+          min-height: 842px;
         }
         .proposal {
           width: 595px;
-          height: auto;
+          min-height: 842px;
           border: 1px solid #D9C68D;
           padding: 28px;
           background: #FFFDF7;
-          page-break-inside: avoid;
+          display: flex;
+          flex-direction: column;
         }
         header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-end;
+          align-items: flex-start;
           border-bottom: 3px solid #073F35;
-          padding-bottom: 14px;
-          margin-bottom: 20px;
+          padding-bottom: 12px;
+          margin-bottom: 18px;
+          gap: 12px;
         }
         .doc-title {
           margin: 0;
-          font-size: 30px;
+          font-size: 26px;
           font-style: italic;
           font-weight: 900;
           color: #073F35;
-          letter-spacing: 2px;
+          letter-spacing: 1.5px;
           padding-bottom: 4px;
           border-bottom: 3px solid #073F35;
           position: relative;
@@ -113,131 +121,143 @@ export function buildQuotationHtml(
           display: flex;
           flex-direction: column;
           align-items: flex-end;
-          gap: 5px;
+          gap: 4px;
+          flex-shrink: 0;
         }
         .brand-logo {
-          height: 60px;
+          height: 55px;
           width: auto;
           display: block;
         }
         .company-name {
           margin: 0;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 900;
           color: #073F35;
-          letter-spacing: 1px;
+          letter-spacing: 0.8px;
           text-transform: uppercase;
+          text-align: right;
         }
         .company-detail {
           margin: 0;
-          font-size: 9px;
+          font-size: 8px;
           color: #C9A227;
           font-weight: 600;
+          text-align: right;
         }
         .title {
-          margin: 24px 0 16px;
+          margin: 20px 0 14px;
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
           flex-wrap: wrap;
-          gap: 8px;
+          gap: 6px;
         }
         .title h2 {
           margin: 0;
-          font-size: 22px;
+          font-size: 20px;
           color: #073F35;
         }
         .title span {
           color: #D6A51E;
-          font-size: 11px;
+          font-size: 10px;
           text-transform: uppercase;
+          font-weight: 600;
         }
         .details {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 8px 16px;
+          gap: 8px 14px;
           background: #F9F7F0;
           border-left: 5px solid #D6A51E;
-          padding: 16px;
-          margin-bottom: 20px;
+          padding: 14px;
+          margin-bottom: 18px;
+        }
+        .detail {
+          min-width: 0;
         }
         .detail label {
           display: block;
           color: #6A7771;
-          font-size: 9px;
+          font-size: 8px;
           text-transform: uppercase;
           margin-bottom: 3px;
+          font-weight: 700;
         }
         .detail strong {
-          font-size: 12px;
+          font-size: 11px;
           color: #073F35;
           word-wrap: break-word;
+          display: block;
         }
         .menu-section {
-          page-break-inside: avoid;
-          margin: 16px 0;
+          margin: 14px 0;
+          flex: 0 0 auto;
         }
         .menu-section h2 {
           margin: 0 0 8px;
-          padding-bottom: 6px;
+          padding-bottom: 5px;
           border-bottom: 1px solid #D9C68D;
           color: #073F35;
-          font-size: 16px;
+          font-size: 15px;
+          font-weight: 700;
         }
         ul {
           margin: 0;
           padding: 0;
-          columns: 1;
-          column-gap: 0;
+          columns: 2;
+          column-gap: 20px;
         }
-        @media (min-width: 595px) {
+        @media (max-width: 450px) {
           ul {
-            columns: 2;
-            column-gap: 24px;
+            columns: 1;
+            column-gap: 0;
           }
         }
         li {
           list-style: none;
-          margin: 0 0 7px;
-          font-size: 12px;
-          line-height: 1.4;
-          break-inside: avoid;
-          page-break-inside: avoid;
+          margin: 0 0 6px;
+          font-size: 11px;
+          line-height: 1.5;
         }
         li::before {
           content: "•";
           color: #D6A51E;
-          font-size: 16px;
-          margin-right: 7px;
+          font-size: 14px;
+          margin-right: 6px;
           vertical-align: -1px;
         }
         small {
           color: #6A7771;
-          margin-left: 7px;
-          font-size: 9px;
+          margin-left: 6px;
+          font-size: 8px;
         }
         em {
           display: block;
-          margin-left: 20px;
+          margin-left: 18px;
           color: #6A7771;
-          font-size: 9px;
+          font-size: 8px;
+          margin-top: 2px;
         }
         footer {
-          margin-top: 24px;
+          margin-top: auto;
+          padding-top: 20px;
           border-top: 1px solid #D9C68D;
-          padding-top: 12px;
+          padding-bottom: 10px;
           color: #6A7771;
-          font-size: 9px;
+          font-size: 8px;
           text-align: center;
-          line-height: 1.4;
+          line-height: 1.5;
         }
         @media print {
-          html, body {
+          body {
+            padding: 0;
             width: 595px;
           }
           .proposal {
-            page-break-after: avoid;
-            page-break-inside: avoid;
+            max-width: none;
+            width: 595px;
+            min-height: 842px;
           }
         }
       </style>
