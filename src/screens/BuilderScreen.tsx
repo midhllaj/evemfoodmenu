@@ -122,15 +122,16 @@ export function BuilderScreen({
     if (!pdfUri) return;
     try {
       if (Platform.OS === "web") {
-        // For web, we need to convert HTML to PDF using the browser's print functionality
-        // First, open the HTML in a new window
+        // For web, open the HTML in a new window and trigger print dialog
         const printWindow = window.open(pdfUri, '_blank');
         if (printWindow) {
-          printWindow.onload = () => {
+          printWindow.addEventListener('load', () => {
             setTimeout(() => {
               printWindow.print();
-            }, 500);
-          };
+            }, 300);
+          });
+        } else {
+          Alert.alert("Popup blocked", "Please allow popups to download the PDF. You can also right-click and select 'Print' then 'Save as PDF'.");
         }
       } else {
         if (await Sharing.isAvailableAsync()) {
@@ -512,12 +513,12 @@ export function BuilderScreen({
             <View style={styles.previewContentWrapper}>
               {pdfUri && Platform.OS === "web" ? (
                 <iframe
-                  src={`${pdfUri}#toolbar=0&navpanes=0&scrollbar=0`}
+                  src={pdfUri}
                   style={{ 
                     width: "100%", 
                     height: "100%",
                     border: "none", 
-                    backgroundColor: "#fff"
+                    backgroundColor: "#f5f5f5"
                   }}
                   title="PDF Preview"
                 />
@@ -528,7 +529,7 @@ export function BuilderScreen({
                     PDF Ready
                   </Text>
                   <Text style={[styles.previewSubtext, { color: theme.colors.muted }]}>
-                    Use the Download button to view the full PDF
+                    Use the Download button below to view and save the PDF
                   </Text>
                 </View>
               ) : (
@@ -766,13 +767,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 16
+    padding: 12
   },
   previewModal: {
     width: "100%",
-    maxWidth: 1000,
-    height: "96%",
-    maxHeight: 850,
+    maxWidth: 900,
+    height: "95%",
+    maxHeight: 800,
     borderRadius: 12,
     overflow: "hidden",
     shadowColor: "#000",

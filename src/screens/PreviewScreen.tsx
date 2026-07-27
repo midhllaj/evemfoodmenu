@@ -6,7 +6,7 @@ import { Button } from "../components/Button";
 import { store } from "../storage/store";
 import { AppTheme } from "../theme/theme";
 import { CustomerDetails, Heading, SelectedDish } from "../types";
-import { createAndSharePdf, downloadQuotationPdf, generatePdfBytes } from "../utils/pdf";
+import { generatePdfBytes } from "../utils/pdf";
 import { LOGO_BASE64 } from "../utils/logo";
 
 type Props = {

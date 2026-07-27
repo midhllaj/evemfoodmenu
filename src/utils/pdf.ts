@@ -16,25 +16,6 @@ const makeFileName = (customer: CustomerDetails) => {
   return `${base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "evam-quotation"}.pdf`;
 };
 
-const wrapWords = (text: string, maxChars: number) => {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-
-  words.forEach((word) => {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > maxChars && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  });
-
-  if (line) lines.push(line);
-  return lines.length ? lines : [""];
-};
-
 export function buildQuotationHtml(
   customer: CustomerDetails,
   headings: Heading[],
@@ -74,31 +55,42 @@ export function buildQuotationHtml(
   <html>
     <head>
       <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
       <style>
-        @page { size: A4; margin: 34px; }
-        body {
+        * {
+          box-sizing: border-box;
+        }
+        @page { 
+          size: A4 portrait; 
+          margin: 0; 
+        }
+        html, body {
           margin: 0;
+          padding: 0;
+          width: 595px;
           background: #F9F7F0;
           color: #073F35;
           font-family: Georgia, "Times New Roman", serif;
         }
         .proposal {
-          min-height: 1030px;
+          width: 595px;
+          height: auto;
           border: 1px solid #D9C68D;
-          padding: 34px;
+          padding: 28px;
           background: #FFFDF7;
+          page-break-inside: avoid;
         }
         header {
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
           border-bottom: 3px solid #073F35;
-          padding-bottom: 16px;
-          margin-bottom: 22px;
+          padding-bottom: 14px;
+          margin-bottom: 20px;
         }
         .doc-title {
           margin: 0;
-          font-size: 34px;
+          font-size: 30px;
           font-style: italic;
           font-weight: 900;
           color: #073F35;
@@ -121,16 +113,16 @@ export function buildQuotationHtml(
           display: flex;
           flex-direction: column;
           align-items: flex-end;
-          gap: 6px;
+          gap: 5px;
         }
         .brand-logo {
-          height: 72px;
+          height: 60px;
           width: auto;
           display: block;
         }
         .company-name {
           margin: 0;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 900;
           color: #073F35;
           letter-spacing: 1px;
@@ -138,95 +130,115 @@ export function buildQuotationHtml(
         }
         .company-detail {
           margin: 0;
-          font-size: 10px;
+          font-size: 9px;
           color: #C9A227;
           font-weight: 600;
         }
         .title {
-          margin: 30px 0 18px;
+          margin: 24px 0 16px;
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
+          flex-wrap: wrap;
+          gap: 8px;
         }
         .title h2 {
           margin: 0;
-          font-size: 24px;
+          font-size: 22px;
           color: #073F35;
         }
         .title span {
           color: #D6A51E;
-          font-size: 12px;
+          font-size: 11px;
           text-transform: uppercase;
         }
         .details {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 10px 18px;
+          gap: 8px 16px;
           background: #F9F7F0;
           border-left: 5px solid #D6A51E;
-          padding: 18px;
-          margin-bottom: 24px;
+          padding: 16px;
+          margin-bottom: 20px;
         }
         .detail label {
           display: block;
           color: #6A7771;
-          font-size: 10px;
+          font-size: 9px;
           text-transform: uppercase;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
         .detail strong {
-          font-size: 13px;
+          font-size: 12px;
           color: #073F35;
+          word-wrap: break-word;
         }
         .menu-section {
-          break-inside: avoid;
-          margin: 18px 0;
+          page-break-inside: avoid;
+          margin: 16px 0;
         }
         .menu-section h2 {
           margin: 0 0 8px;
-          padding-bottom: 7px;
+          padding-bottom: 6px;
           border-bottom: 1px solid #D9C68D;
           color: #073F35;
-          font-size: 18px;
+          font-size: 16px;
         }
         ul {
           margin: 0;
           padding: 0;
-          columns: 2;
-          column-gap: 28px;
+          columns: 1;
+          column-gap: 0;
+        }
+        @media (min-width: 595px) {
+          ul {
+            columns: 2;
+            column-gap: 24px;
+          }
         }
         li {
           list-style: none;
-          margin: 0 0 8px;
-          font-size: 13px;
-          line-height: 1.35;
+          margin: 0 0 7px;
+          font-size: 12px;
+          line-height: 1.4;
           break-inside: avoid;
+          page-break-inside: avoid;
         }
         li::before {
           content: "•";
           color: #D6A51E;
-          font-size: 18px;
-          margin-right: 8px;
+          font-size: 16px;
+          margin-right: 7px;
           vertical-align: -1px;
         }
         small {
           color: #6A7771;
-          margin-left: 8px;
-          font-size: 10px;
+          margin-left: 7px;
+          font-size: 9px;
         }
         em {
           display: block;
-          margin-left: 22px;
+          margin-left: 20px;
           color: #6A7771;
-          font-size: 10px;
+          font-size: 9px;
         }
         footer {
-          margin-top: 30px;
+          margin-top: 24px;
           border-top: 1px solid #D9C68D;
-          padding-top: 14px;
+          padding-top: 12px;
           color: #6A7771;
-          font-size: 10px;
+          font-size: 9px;
           text-align: center;
+          line-height: 1.4;
+        }
+        @media print {
+          html, body {
+            width: 595px;
+          }
+          .proposal {
+            page-break-after: avoid;
+            page-break-inside: avoid;
+          }
         }
       </style>
     </head>
@@ -269,22 +281,8 @@ export async function generatePdfBytes(
   const fileName = makeFileName(customer);
   
   if (Platform.OS === "web") {
-    // For web, create a blob URL from the HTML
-    const htmlWithStyles = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Evam Catering Quotation</title>
-        </head>
-        <body style="margin: 0; padding: 20px; font-family: Georgia, serif;">
-          ${html}
-        </body>
-      </html>
-    `;
-    
-    const blob = new Blob([htmlWithStyles], { type: "text/html" });
+    // For web, create a standalone HTML document with A4 sizing
+    const blob = new Blob([html], { type: "text/html" });
     const uri = URL.createObjectURL(blob);
     return { uri, fileName };
   } else {
@@ -292,127 +290,4 @@ export async function generatePdfBytes(
     const { uri } = await Print.printToFileAsync({ html });
     return { uri, fileName };
   }
-}
-
-export async function createAndSharePdf(
-  customer: CustomerDetails,
-  headings: Heading[],
-  selected: SelectedDish[]
-) {
-  const { bytes, fileName, base64Data } = await generatePdfBytes(customer, headings, selected);
-
-  if (Platform.OS === "web") {
-    const pdfBuffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(pdfBuffer).set(bytes);
-    const blob = new Blob([pdfBuffer], { type: "application/pdf" });
-    const file = new File([blob], fileName, { type: "application/pdf" });
-
-    // On web, attempt to open the native OS share sheet with WhatsApp, Email, etc.
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: "Evam Catering Quotation",
-          text: "Please find attached the catering menu quotation for your event."
-        });
-        return fileName;
-      } catch (err) {
-        // User cancelled - this is expected behavior, not an error
-        if ((err as Error).name === "AbortError") {
-          return fileName;
-        }
-        throw err;
-      }
-    }
-    
-    // Fallback: If Web Share API is not available, download the file
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return fileName;
-  }
-
-  // Native mobile share flow - opens share sheet with WhatsApp, Instagram, Email, etc.
-  const FileSystem = await import("expo-file-system");
-  const fileUri = FileSystem.cacheDirectory + fileName;
-  await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
-
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(fileUri, {
-      mimeType: "application/pdf",
-      dialogTitle: "Share quotation via",
-      UTI: "com.adobe.pdf" // iOS needs this for WhatsApp, Email apps to recognize it as PDF
-    });
-  } else {
-    throw new Error("Sharing is not available on this device");
-  }
-  return fileUri;
-}
-
-export async function downloadQuotationPdf(
-  customer: CustomerDetails,
-  headings: Heading[],
-  selected: SelectedDish[]
-) {
-  const { bytes, fileName, base64Data } = await generatePdfBytes(customer, headings, selected);
-
-  if (Platform.OS === "web") {
-    // Web: Direct download to user's Downloads folder
-    const pdfBuffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(pdfBuffer).set(bytes);
-    const blob = new Blob([pdfBuffer], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return fileName;
-  }
-
-  // Native mobile download
-  const FileSystem = await import("expo-file-system");
-  
-  if (Platform.OS === "android") {
-    // Android: Save to Downloads folder using Storage Access Framework
-    const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (permissions.granted) {
-      const uri = await FileSystem.StorageAccessFramework.createFileAsync(
-        permissions.directoryUri, 
-        fileName, 
-        "application/pdf"
-      );
-      await FileSystem.writeAsStringAsync(uri, base64Data, { 
-        encoding: FileSystem.EncodingType.Base64 
-      });
-      return uri;
-    } else {
-      throw new Error("Storage permission denied. Please grant access to save the file.");
-    }
-  }
-
-  // iOS: Save to app's document directory and open share sheet (iOS convention)
-  const fileUri = FileSystem.documentDirectory + fileName;
-  await FileSystem.writeAsStringAsync(fileUri, base64Data, { 
-    encoding: FileSystem.EncodingType.Base64 
-  });
-  
-  if (await Sharing.isAvailableAsync()) {
-    // iOS users download by choosing "Save to Files" from the share sheet
-    await Sharing.shareAsync(fileUri, {
-      mimeType: "application/pdf",
-      dialogTitle: "Save PDF",
-      UTI: "com.adobe.pdf" 
-    });
-  } else {
-    throw new Error("Cannot save file on this device");
-  }
-  return fileUri;
 }
