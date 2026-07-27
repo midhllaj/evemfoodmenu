@@ -47,6 +47,7 @@ export function BuilderScreen({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [pdfUri, setPdfUri] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
 
   const sortedHeadings = useMemo(
     () => headings.filter((heading) => heading.visible).sort((a, b) => a.displayOrder - b.displayOrder),
@@ -54,6 +55,31 @@ export function BuilderScreen({
   );
 
   const selectedDishesArray = useMemo(() => Object.values(selectedDishes), [selectedDishes]);
+
+  function toggleParentDish(parentDish: Dish) {
+    const subDishes = dishes.filter(d => d.parentDishId === parentDish.id);
+    const allSelected = subDishes.every(sub => selectedDishes[sub.id]);
+    
+    const next = { ...selectedDishes };
+    
+    if (allSelected) {
+      // Deselect all sub-dishes
+      subDishes.forEach(sub => {
+        delete next[sub.id];
+      });
+    } else {
+      // Select all sub-dishes
+      subDishes.forEach(sub => {
+        next[sub.id] = sub;
+      });
+    }
+    
+    onSelectedChange(next);
+  }
+
+  function toggleExpandParent(parentDishId: string) {
+    setExpandedParents(prev => ({ ...prev, [parentDishId]: !prev[parentDishId] }));
+  }
 
   async function openPreview() {
     if (!selectedDishesArray.length) {
@@ -146,6 +172,7 @@ export function BuilderScreen({
   const filteredDishes = useMemo(() => {
     const query = globalSearch.trim().toLowerCase();
     return dishes
+      .filter((dish) => !dish.parentDishId) // Only show parent dishes or standalone dishes, not sub-dishes
       .filter((dish) => (query ? dish.name.toLowerCase().includes(query) || dish.category.toLowerCase().includes(query) : true))
       .filter((dish) => (selectedCategories.length ? selectedCategories.includes(dish.category) : true))
       .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name));
@@ -330,38 +357,110 @@ export function BuilderScreen({
               style={[styles.innerSearch, { borderColor: theme.colors.border, color: theme.colors.text }]}
             />
             {headingDishes.map((dish) => {
+              const isParent = dish.isParent;
+              const subDishes = isParent ? dishes.filter(d => d.parentDishId === dish.id) : [];
+              const isExpanded = expandedParents[dish.id];
+              const allSubSelected = isParent && subDishes.length > 0 && subDishes.every(sub => selectedDishes[sub.id]);
+              const someSubSelected = isParent && subDishes.some(sub => selectedDishes[sub.id]);
               const selected = selectedDishes[dish.id];
+              
               return (
-                <Pressable key={dish.id} onLongPress={() => dishActions(dish)} style={styles.dishRow}>
-                  <Pressable onPress={() => toggleDish(dish)} style={[styles.checkbox, { borderColor: theme.colors.primary, backgroundColor: selected ? theme.colors.primary : "transparent" }]}>
-                    {selected ? <MaterialCommunityIcons name="check" size={18} color={theme.colors.white} /> : null}
-                  </Pressable>
-                  <View style={styles.dishBody}>
-                    <Text style={[styles.dishName, { color: theme.colors.text }]}>
-                      {dish.favorite ? "★ " : ""}
-                      {dish.name}
-                    </Text>
-                    <Text style={[styles.dishMeta, { color: theme.colors.muted }]}>{dish.category}</Text>
-                    {selected ? (
-                      <View style={styles.selectedFields}>
-                        <TextInput
-                          value={selected.quantity}
-                          onChangeText={(quantity) => updateSelectedDish(dish.id, { quantity })}
-                          placeholder="Qty"
-                          placeholderTextColor={theme.colors.muted}
-                          style={[styles.miniInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-                        />
-                        <TextInput
-                          value={selected.remarks}
-                          onChangeText={(remarks) => updateSelectedDish(dish.id, { remarks })}
-                          placeholder="Remarks"
-                          placeholderTextColor={theme.colors.muted}
-                          style={[styles.remarksInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-                        />
+                <View key={dish.id}>
+                  <Pressable onLongPress={() => dishActions(dish)} style={styles.dishRow}>
+                    <Pressable 
+                      onPress={() => isParent ? toggleParentDish(dish) : toggleDish(dish)} 
+                      style={[
+                        styles.checkbox, 
+                        { 
+                          borderColor: theme.colors.primary, 
+                          backgroundColor: (isParent ? allSubSelected : selected) ? theme.colors.primary : "transparent",
+                          opacity: (isParent && someSubSelected && !allSubSelected) ? 0.5 : 1
+                        }
+                      ]}
+                    >
+                      {(isParent ? allSubSelected : selected) ? <MaterialCommunityIcons name="check" size={18} color={theme.colors.white} /> : null}
+                      {(isParent && someSubSelected && !allSubSelected) ? <MaterialCommunityIcons name="minus" size={18} color={theme.colors.white} /> : null}
+                    </Pressable>
+                    <View style={styles.dishBody}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={[styles.dishName, { color: theme.colors.text }]}>
+                          {dish.favorite ? "★ " : ""}
+                          {dish.name}
+                        </Text>
+                        {isParent && subDishes.length > 0 ? (
+                          <Pressable onPress={() => toggleExpandParent(dish.id)}>
+                            <MaterialCommunityIcons 
+                              name={isExpanded ? "chevron-up" : "chevron-down"} 
+                              size={24} 
+                              color={theme.colors.primary} 
+                            />
+                          </Pressable>
+                        ) : null}
                       </View>
-                    ) : null}
-                  </View>
-                </Pressable>
+                      <Text style={[styles.dishMeta, { color: theme.colors.muted }]}>
+                        {dish.category}
+                        {isParent && subDishes.length > 0 ? ` (${subDishes.length} items)` : ""}
+                      </Text>
+                      {selected && !isParent ? (
+                        <View style={styles.selectedFields}>
+                          <TextInput
+                            value={selected.quantity}
+                            onChangeText={(quantity) => updateSelectedDish(dish.id, { quantity })}
+                            placeholder="Qty"
+                            placeholderTextColor={theme.colors.muted}
+                            style={[styles.miniInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                          />
+                          <TextInput
+                            value={selected.remarks}
+                            onChangeText={(remarks) => updateSelectedDish(dish.id, { remarks })}
+                            placeholder="Remarks"
+                            placeholderTextColor={theme.colors.muted}
+                            style={[styles.remarksInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                  
+                  {/* Sub-dishes */}
+                  {isParent && isExpanded && subDishes.map((subDish) => {
+                    const subSelected = selectedDishes[subDish.id];
+                    return (
+                      <Pressable key={subDish.id} onLongPress={() => dishActions(subDish)} style={[styles.dishRow, styles.subDishRow]}>
+                        <View style={{ width: 28 }} />
+                        <Pressable 
+                          onPress={() => toggleDish(subDish)} 
+                          style={[styles.checkbox, styles.subCheckbox, { borderColor: theme.colors.primary, backgroundColor: subSelected ? theme.colors.primary : "transparent" }]}
+                        >
+                          {subSelected ? <MaterialCommunityIcons name="check" size={16} color={theme.colors.white} /> : null}
+                        </Pressable>
+                        <View style={styles.dishBody}>
+                          <Text style={[styles.dishName, styles.subDishName, { color: theme.colors.text }]}>
+                            {subDish.name}
+                          </Text>
+                          {subSelected ? (
+                            <View style={styles.selectedFields}>
+                              <TextInput
+                                value={subSelected.quantity}
+                                onChangeText={(quantity) => updateSelectedDish(subDish.id, { quantity })}
+                                placeholder="Qty"
+                                placeholderTextColor={theme.colors.muted}
+                                style={[styles.miniInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                              />
+                              <TextInput
+                                value={subSelected.remarks}
+                                onChangeText={(remarks) => updateSelectedDish(subDish.id, { remarks })}
+                                placeholder="Remarks"
+                                placeholderTextColor={theme.colors.muted}
+                                style={[styles.remarksInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                              />
+                            </View>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               );
             })}
             {sectionAddOpen[heading.id] ? (
@@ -584,6 +683,11 @@ const styles = StyleSheet.create({
     gap: 11,
     paddingVertical: 10
   },
+  subDishRow: {
+    paddingLeft: 10,
+    paddingVertical: 8,
+    backgroundColor: "rgba(0,0,0,0.02)"
+  },
   checkbox: {
     width: 28,
     height: 28,
@@ -593,6 +697,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2
   },
+  subCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 5
+  },
   dishBody: {
     flex: 1,
     gap: 3
@@ -600,6 +709,10 @@ const styles = StyleSheet.create({
   dishName: {
     fontSize: 15,
     fontWeight: "800"
+  },
+  subDishName: {
+    fontSize: 14,
+    fontWeight: "600"
   },
   dishMeta: {
     fontSize: 12

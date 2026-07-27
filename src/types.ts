@@ -33,6 +33,8 @@ export type Dish = {
   headingId: string;
   price?: string;
   favorite?: boolean;
+  parentDishId?: string; // For sub-dishes that belong to a parent dish
+  isParent?: boolean; // Indicates this is a parent dish with sub-dishes
 };
 
 export type SelectedDish = Dish & {

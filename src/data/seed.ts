@@ -68,23 +68,30 @@ export const seedDishes: Dish[] = [
   { id: "tender-coconut-pudding", name: "Tender Coconut Pudding", category: "Desserts", headingId: "desserts" },
   { id: "ice-cream", name: "Ice Cream", category: "Ice Cream", headingId: "desserts" },
   { id: "herbal-tea", name: "Herbal Tea", category: "Tea & Coffee", headingId: "herbal-tea" },
-  { id: "rice", name: "Rice", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "parippu", name: "Parippu", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "sambar", name: "Sambar", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "rasam", name: "Rasam", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "moru", name: "Moru", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "avial", name: "Avial", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "thoran", name: "Thoran", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "kaalan", name: "Kaalan", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "olan", name: "Olan", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "pachadi", name: "Pachadi", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "kichadi", name: "Kichadi", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "pappadam", name: "Pappadam", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "banana", name: "Banana", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "pickle", name: "Pickle", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "payasam", name: "Payasam", category: "Kerala Sadya", headingId: "desserts" },
-  { id: "upperi", name: "Upperi", category: "Kerala Sadya", headingId: "food-menu" },
-  { id: "sharkara-varatti", name: "Sharkara Varatti", category: "Kerala Sadya", headingId: "food-menu" }
+  
+  // Kerala Sadya - Parent Dish
+  { id: "kerala-sadya", name: "Kerala Sadya (Full)", category: "Kerala Sadya", headingId: "food-menu", isParent: true, favorite: true },
+  
+  // Kerala Sadya Sub-Dishes
+  { id: "rice", name: "Rice", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "parippu", name: "Parippu", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "sambar", name: "Sambar", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "rasam", name: "Rasam", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "moru", name: "Moru (Buttermilk)", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "avial", name: "Avial", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "thoran", name: "Thoran", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "kaalan", name: "Kaalan", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "olan", name: "Olan", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "pachadi", name: "Pachadi", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "kichadi", name: "Kichadi", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "erissery", name: "Erissery", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "pappadam", name: "Pappadam", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "banana", name: "Banana", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "pickle", name: "Pickle", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "upperi", name: "Upperi (Banana Chips)", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "sharkara-varatti", name: "Sharkara Varatti (Jaggery Banana)", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" },
+  { id: "payasam", name: "Payasam", category: "Kerala Sadya", headingId: "desserts", parentDishId: "kerala-sadya" },
+  { id: "ghee", name: "Ghee", category: "Kerala Sadya", headingId: "food-menu", parentDishId: "kerala-sadya" }
 ];
 
 export const seedTemplates: MenuTemplate[] = [
@@ -98,21 +105,7 @@ export const seedTemplates: MenuTemplate[] = [
     id: "sadya-package",
     name: "Sadya Package",
     headingIds: ["food-menu", "desserts"],
-    dishIds: [
-      "rice",
-      "parippu",
-      "sambar",
-      "rasam",
-      "moru",
-      "avial",
-      "thoran",
-      "pappadam",
-      "banana",
-      "pickle",
-      "payasam",
-      "upperi",
-      "sharkara-varatti"
-    ]
+    dishIds: ["kerala-sadya"] // Just the parent dish ID
   },
   {
     id: "ramadan",
