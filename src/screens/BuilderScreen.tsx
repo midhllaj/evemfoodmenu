@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, TouchableOpacity, Platform } from "react-native";
+import * as Sharing from "expo-sharing";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Field } from "../components/Field";
@@ -8,6 +9,8 @@ import { categories } from "../data/seed";
 import { AppTheme } from "../theme/theme";
 import { Dish, Heading, SelectedDish } from "../types";
 import { makeId } from "../utils/id";
+import { generatePdfBytes } from "../utils/pdf";
+import { store } from "../storage/store";
 
 type Props = {
   theme: AppTheme;
@@ -19,6 +22,7 @@ type Props = {
   onDishesChange: (dishes: Dish[]) => void;
   onBack: () => void;
   onPreview: () => void;
+  customer: any;
 };
 
 export function BuilderScreen({
@@ -30,7 +34,8 @@ export function BuilderScreen({
   onHeadingsChange,
   onDishesChange,
   onBack,
-  onPreview
+  onPreview,
+  customer
 }: Props) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [headingSearch, setHeadingSearch] = useState<Record<string, string>>({});
@@ -39,11 +44,104 @@ export function BuilderScreen({
   const [sectionDishNames, setSectionDishNames] = useState<Record<string, string>>({});
   const [newHeading, setNewHeading] = useState("");
   const [newDish, setNewDish] = useState({ name: "", category: "Kerala Sadya", headingId: "food-menu", price: "" });
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [pdfUri, setPdfUri] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const sortedHeadings = useMemo(
     () => headings.filter((heading) => heading.visible).sort((a, b) => a.displayOrder - b.displayOrder),
     [headings]
   );
+
+  const selectedDishesArray = useMemo(() => Object.values(selectedDishes), [selectedDishes]);
+
+  async function openPreview() {
+    if (!selectedDishesArray.length) {
+      Alert.alert("No dishes selected", "Please select at least one dish to preview the PDF.");
+      return;
+    }
+    setIsGenerating(true);
+    setShowPreviewModal(true); // Show modal immediately
+    try {
+      console.log("Generating PDF preview...");
+      const result = await generatePdfBytes(customer, headings, selectedDishesArray);
+      console.log("PDF generated:", result);
+      if (result.uri) {
+        console.log("PDF URI:", result.uri);
+        setPdfUri(result.uri);
+      } else {
+        console.error("No URI returned from PDF generation");
+        Alert.alert("Preview failed", "Could not generate PDF preview.");
+        setShowPreviewModal(false);
+      }
+    } catch (error) {
+      console.error("Preview error:", error);
+      Alert.alert("Preview failed", error instanceof Error ? error.message : "Could not generate PDF preview.");
+      setShowPreviewModal(false);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  function closePreview() {
+    setShowPreviewModal(false);
+    setPdfUri("");
+  }
+
+  async function downloadPdf() {
+    if (!pdfUri) return;
+    try {
+      if (Platform.OS === "web") {
+        // For web, we need to convert HTML to PDF using the browser's print functionality
+        // First, open the HTML in a new window
+        const printWindow = window.open(pdfUri, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
+      } else {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(pdfUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Download PDF",
+            UTI: "com.adobe.pdf"
+          });
+        }
+      }
+    } catch (error) {
+      Alert.alert("Download failed", error instanceof Error ? error.message : "Could not download PDF.");
+    }
+  }
+
+  async function sharePdf() {
+    if (!pdfUri) return;
+    try {
+      if (Platform.OS === "web") {
+        // For web, open print dialog which allows saving as PDF or sharing
+        const printWindow = window.open(pdfUri, '_blank');
+        if (printWindow) {
+          Alert.alert("Share", "Please use your browser's share or save options to share the PDF.");
+        } else {
+          Alert.alert("Popup blocked", "Please allow popups to share the PDF.");
+        }
+      } else {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(pdfUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Share quotation via",
+            UTI: "com.adobe.pdf"
+          });
+        }
+      }
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        Alert.alert("Share failed", error instanceof Error ? error.message : "Could not share PDF.");
+      }
+    }
+  }
 
   const filteredDishes = useMemo(() => {
     const query = globalSearch.trim().toLowerCase();
@@ -150,8 +248,8 @@ export function BuilderScreen({
           <Text style={[styles.title, { color: theme.colors.text }]}>Menu builder</Text>
           <Text style={[styles.subtitle, { color: theme.colors.muted }]}>{Object.keys(selectedDishes).length} dishes selected</Text>
         </View>
-        <Pressable onPress={onPreview} style={[styles.previewIcon, { backgroundColor: theme.colors.primary }]}>
-          <MaterialCommunityIcons name="file-pdf-box" size={24} color={theme.colors.white} />
+        <Pressable onPress={openPreview} style={[styles.previewIcon, { backgroundColor: theme.colors.primary }]}>
+          <MaterialCommunityIcons name="eye" size={24} color={theme.colors.white} />
         </Pressable>
       </View>
 
@@ -309,8 +407,81 @@ export function BuilderScreen({
 
       <View style={styles.actions}>
         <Button label="Back" theme={theme} variant="ghost" onPress={onBack} style={styles.action} />
-        <Button label="Generate PDF" theme={theme} onPress={onPreview} style={styles.action} />
+        <Button label={isGenerating ? "Generating..." : "Preview PDF"} theme={theme} onPress={openPreview} style={styles.action} />
       </View>
+
+      {/* PDF Preview Modal */}
+      <Modal
+        visible={showPreviewModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closePreview}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.previewModal, { backgroundColor: theme.colors.background }]}>
+            {/* Header with title and X button */}
+            <View style={[styles.previewHeader, { borderBottomColor: theme.colors.border }]}>
+              <Text style={[styles.previewTitle, { color: theme.colors.text }]}>Quotation Preview</Text>
+              <TouchableOpacity onPress={closePreview} style={styles.closeButton}>
+                <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* PDF Content Area - No Theme Selector */}
+            <View style={styles.previewContentWrapper}>
+              {pdfUri && Platform.OS === "web" ? (
+                <iframe
+                  src={`${pdfUri}#toolbar=0&navpanes=0&scrollbar=0`}
+                  style={{ 
+                    width: "100%", 
+                    height: "100%",
+                    border: "none", 
+                    backgroundColor: "#fff"
+                  }}
+                  title="PDF Preview"
+                />
+              ) : pdfUri ? (
+                <View style={styles.previewPlaceholder}>
+                  <MaterialCommunityIcons name="file-pdf-box" size={64} color={theme.colors.primary} />
+                  <Text style={[styles.previewPlaceholderText, { color: theme.colors.text }]}>
+                    PDF Ready
+                  </Text>
+                  <Text style={[styles.previewSubtext, { color: theme.colors.muted }]}>
+                    Use the Download button to view the full PDF
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.previewPlaceholder}>
+                  <MaterialCommunityIcons name="loading" size={64} color={theme.colors.primary} />
+                  <Text style={[styles.previewPlaceholderText, { color: theme.colors.text }]}>
+                    Generating PDF...
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Footer with buttons aligned right */}
+            <View style={styles.previewFooter}>
+              <View style={styles.previewButtonsRight}>
+                <Button 
+                  label="Close" 
+                  theme={theme} 
+                  variant="ghost" 
+                  onPress={closePreview} 
+                  style={styles.footerButton} 
+                />
+                <Button 
+                  label="Download PDF" 
+                  theme={theme} 
+                  onPress={downloadPdf} 
+                  style={styles.footerButton}
+                  icon={<MaterialCommunityIcons name="download" size={18} color={theme.colors.white} />}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -494,5 +665,110 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16
+  },
+  previewModal: {
+    width: "100%",
+    maxWidth: 1000,
+    height: "96%",
+    maxHeight: 850,
+    borderRadius: 12,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8
+  },
+  previewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.2
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16
+  },
+  previewContent: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: "#f5f5f5",
+    overflow: "hidden"
+  },
+  previewContentWrapper: {
+    flex: 1,
+    margin: 16,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  pdfContainer: {
+    width: "100%",
+    minHeight: 450,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  previewPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    minHeight: 300,
+    padding: 20
+  },
+  previewPlaceholderText: {
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center"
+  },
+  previewSubtext: {
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: 20
+  },
+  previewFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0"
+  },
+  previewButtonsRight: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+    flexWrap: "wrap"
+  },
+  footerButton: {
+    minWidth: 110,
+    paddingHorizontal: 12,
+    minHeight: 46
   }
 });

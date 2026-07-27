@@ -1,11 +1,12 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Text, View, Modal, TouchableOpacity, Linking, Platform } from "react-native";
+import * as Sharing from "expo-sharing";
 import { Button } from "../components/Button";
 import { store } from "../storage/store";
 import { AppTheme } from "../theme/theme";
 import { CustomerDetails, Heading, SelectedDish } from "../types";
-import { createAndSharePdf, downloadQuotationPdf } from "../utils/pdf";
+import { createAndSharePdf, downloadQuotationPdf, generatePdfBytes } from "../utils/pdf";
 import { LOGO_BASE64 } from "../utils/logo";
 
 type Props = {
@@ -19,6 +20,9 @@ type Props = {
 
 export function PreviewScreen({ theme, customer, headings, selected, onSaveTemplate, onBack }: Props) {
   const [busy, setBusy] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [pdfDataUrl, setPdfDataUrl] = useState<string>("");
+  
   const groups = useMemo(
     () =>
       headings
@@ -30,36 +34,181 @@ export function PreviewScreen({ theme, customer, headings, selected, onSaveTempl
   );
 
   async function sharePdf() {
+    console.log("Share PDF clicked, selected dishes:", selected.length);
     if (!selected.length) {
       Alert.alert("No dishes selected", "Select at least one dish before generating the quotation PDF.");
       return;
     }
     setBusy(true);
     try {
-      const uri = await createAndSharePdf(customer, headings, selected);
-      await store.addPdfHistory(uri);
-      Alert.alert("PDF ready", "The catering proposal PDF has been created.");
+      console.log("Generating PDF for sharing...");
+      const result = await generatePdfBytes(customer, headings, selected);
+      const { uri, fileName } = result;
+      
+      if (Platform.OS === "web" && uri) {
+        // For web, fetch the PDF and try native share or show custom menu
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const file = new File([blob], fileName, { type: "application/pdf" });
+        
+        console.log("Checking for native share API...");
+        // Try native share first (works on mobile browsers)
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          console.log("Native share available");
+          try {
+            await navigator.share({
+              files: [file],
+              title: "Evam Catering Quotation",
+              text: "Please find attached the catering menu quotation for your event."
+            });
+            await store.addPdfHistory(fileName);
+            setBusy(false);
+            return;
+          } catch (err) {
+            console.log("Native share error:", err);
+            if ((err as Error).name === "AbortError") {
+              setBusy(false);
+              return;
+            }
+          }
+        }
+        
+        console.log("Showing custom share menu");
+        // Show custom share menu as fallback
+        const url = URL.createObjectURL(blob);
+        setPdfDataUrl(url);
+        setShowShareMenu(true);
+        await store.addPdfHistory(fileName);
+        setBusy(false);
+      } else {
+        // Mobile native share
+        console.log("Mobile share");
+        await store.addPdfHistory(fileName);
+        if (uri && await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Share quotation via",
+            UTI: "com.adobe.pdf"
+          });
+        }
+        setBusy(false);
+      }
     } catch (error) {
-      Alert.alert("PDF failed", error instanceof Error ? error.message : "Could not generate the quotation.");
-    } finally {
+      console.error("Share error:", error);
+      Alert.alert("Share failed", error instanceof Error ? error.message : "Could not share the quotation.");
       setBusy(false);
     }
   }
 
+  function closeShareMenu() {
+    setShowShareMenu(false);
+    if (pdfDataUrl) {
+      URL.revokeObjectURL(pdfDataUrl);
+      setPdfDataUrl("");
+    }
+  }
+
+  async function shareVia(method: string) {
+    const message = encodeURIComponent(`Here is your Evam Catering quotation for ${customer.eventName || "your event"}`);
+    const phone = customer.phoneNumber?.replace(/\D/g, "") || "";
+    
+    if (method === "download") {
+      // Download the PDF
+      const anchor = document.createElement("a");
+      anchor.href = pdfDataUrl;
+      anchor.download = `evam-quotation-${customer.customerName || "customer"}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      closeShareMenu();
+      return;
+    }
+
+    let url = "";
+    switch (method) {
+      case "whatsapp":
+        url = `https://wa.me/${phone}?text=${message}`;
+        break;
+      case "email":
+        url = `mailto:${customer.phoneNumber || ""}?subject=${encodeURIComponent("Evam Catering Quotation")}&body=${message}`;
+        break;
+      case "sms":
+        url = `sms:${phone}?body=${message}`;
+        break;
+      case "telegram":
+        url = `https://t.me/share/url?url=${encodeURIComponent(pdfDataUrl)}&text=${message}`;
+        break;
+    }
+
+    if (url) {
+      try {
+        if (Platform.OS === "web") {
+          window.open(url, "_blank");
+        } else {
+          await Linking.openURL(url);
+        }
+        Alert.alert("Note", "PDF link opened. You may need to manually attach the downloaded PDF file.");
+      } catch (err) {
+        Alert.alert("Error", `Could not open ${method}. Please make sure the app is installed.`);
+      }
+    }
+    closeShareMenu();
+  }
+
   async function downloadPdf() {
+    console.log("=== Download PDF Started ===");
+    console.log("Selected dishes count:", selected.length);
+    
     if (!selected.length) {
       Alert.alert("No dishes selected", "Select at least one dish before downloading the quotation PDF.");
       return;
     }
+    
     setBusy(true);
+    
     try {
-      await downloadQuotationPdf(customer, headings, selected);
-      // On web the PDF is downloaded directly via an anchor click — no alert needed.
-      // On mobile expo-print saves the file.
+      console.log("Step 1: Starting PDF generation...");
+      const result = await generatePdfBytes(customer, headings, selected);
+      console.log("Step 2: PDF generated successfully", result.fileName);
+      
+      const { uri, fileName } = result;
+      
+      if (Platform.OS === "web" && uri) {
+        console.log("Step 3: Reading file from URI for web download...");
+        // For web, we need to fetch the PDF and trigger download
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        console.log("Step 4: Blob created, size:", blob.size);
+        
+        const url = URL.createObjectURL(blob);
+        console.log("Step 5: Object URL created");
+        
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.style.display = "none";
+        
+        console.log("Step 6: Triggering download...");
+        document.body.appendChild(anchor);
+        anchor.click();
+        
+        setTimeout(() => {
+          document.body.removeChild(anchor);
+          URL.revokeObjectURL(url);
+          console.log("Step 7: Cleanup complete");
+        }, 100);
+        
+        Alert.alert("Success", `PDF "${fileName}" is downloading to your device.`);
+      }
+      
     } catch (error) {
+      console.error("=== Download Error ===");
+      console.error("Error details:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
       Alert.alert("Download failed", error instanceof Error ? error.message : "Could not prepare the quotation PDF.");
     } finally {
       setBusy(false);
+      console.log("=== Download PDF Ended ===");
     }
   }
 
@@ -114,6 +263,63 @@ export function PreviewScreen({ theme, customer, headings, selected, onSaveTempl
       </View>
       <Button label={busy ? "Preparing..." : "Download PDF"} theme={theme} onPress={downloadPdf} />
       <Button label="Save Template" theme={theme} variant="soft" onPress={saveTemplate} />
+
+      {/* Share Menu Modal */}
+      <Modal
+        visible={showShareMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={closeShareMenu}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={closeShareMenu}
+        >
+          <View style={[styles.shareMenu, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.shareTitle, { color: theme.colors.text }]}>Share PDF via</Text>
+            
+            <View style={styles.shareOptions}>
+              <TouchableOpacity style={styles.shareOption} onPress={() => shareVia("whatsapp")}>
+                <View style={[styles.shareIcon, { backgroundColor: "#25D366" }]}>
+                  <MaterialCommunityIcons name="whatsapp" size={32} color="#fff" />
+                </View>
+                <Text style={[styles.shareLabel, { color: theme.colors.text }]}>WhatsApp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.shareOption} onPress={() => shareVia("email")}>
+                <View style={[styles.shareIcon, { backgroundColor: "#EA4335" }]}>
+                  <MaterialCommunityIcons name="email" size={32} color="#fff" />
+                </View>
+                <Text style={[styles.shareLabel, { color: theme.colors.text }]}>Email</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.shareOption} onPress={() => shareVia("telegram")}>
+                <View style={[styles.shareIcon, { backgroundColor: "#0088cc" }]}>
+                  <MaterialCommunityIcons name="send" size={32} color="#fff" />
+                </View>
+                <Text style={[styles.shareLabel, { color: theme.colors.text }]}>Telegram</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.shareOption} onPress={() => shareVia("sms")}>
+                <View style={[styles.shareIcon, { backgroundColor: "#34C759" }]}>
+                  <MaterialCommunityIcons name="message-text" size={32} color="#fff" />
+                </View>
+                <Text style={[styles.shareLabel, { color: theme.colors.text }]}>SMS</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.shareOption} onPress={() => shareVia("download")}>
+                <View style={[styles.shareIcon, { backgroundColor: theme.colors.accent }]}>
+                  <MaterialCommunityIcons name="download" size={32} color="#fff" />
+                </View>
+                <Text style={[styles.shareLabel, { color: theme.colors.text }]}>Download</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Button label="Cancel" theme={theme} variant="ghost" onPress={closeShareMenu} />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -192,5 +398,44 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end"
+  },
+  shareMenu: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    gap: 20
+  },
+  shareTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "center"
+  },
+  shareOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-around",
+    gap: 20
+  },
+  shareOption: {
+    alignItems: "center",
+    gap: 8,
+    width: 80
+  },
+  shareIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  shareLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center"
   }
 });

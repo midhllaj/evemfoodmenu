@@ -103,6 +103,7 @@ export function AppShell({ ready, theme, darkMode, onToggleDarkMode }: Props) {
             headings={headings}
             dishes={dishes}
             selectedDishes={draft.selectedDishes}
+            customer={draft.customer}
             onSelectedChange={(selectedDishes) => setDraft((current) => ({ ...current, selectedDishes }))}
             onHeadingsChange={updateHeadings}
             onDishesChange={updateDishes}

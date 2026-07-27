@@ -260,20 +260,98 @@ export function buildQuotationHtml(
   </html>`;
 }
 
+export async function generatePdfBytes(
+  customer: CustomerDetails,
+  headings: Heading[],
+  selected: SelectedDish[]
+): Promise<{ uri?: string; fileName: string; base64Data?: string }> {
+  const html = buildQuotationHtml(customer, headings, selected);
+  const fileName = makeFileName(customer);
+  
+  if (Platform.OS === "web") {
+    // For web, create a blob URL from the HTML
+    const htmlWithStyles = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Evam Catering Quotation</title>
+        </head>
+        <body style="margin: 0; padding: 20px; font-family: Georgia, serif;">
+          ${html}
+        </body>
+      </html>
+    `;
+    
+    const blob = new Blob([htmlWithStyles], { type: "text/html" });
+    const uri = URL.createObjectURL(blob);
+    return { uri, fileName };
+  } else {
+    // For mobile, use expo-print
+    const { uri } = await Print.printToFileAsync({ html });
+    return { uri, fileName };
+  }
+}
+
 export async function createAndSharePdf(
   customer: CustomerDetails,
   headings: Heading[],
   selected: SelectedDish[]
 ) {
-  const html = buildQuotationHtml(customer, headings, selected);
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
-      mimeType: "application/pdf",
-      dialogTitle: "Share Evam catering quotation"
-    });
+  const { bytes, fileName, base64Data } = await generatePdfBytes(customer, headings, selected);
+
+  if (Platform.OS === "web") {
+    const pdfBuffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(pdfBuffer).set(bytes);
+    const blob = new Blob([pdfBuffer], { type: "application/pdf" });
+    const file = new File([blob], fileName, { type: "application/pdf" });
+
+    // On web, attempt to open the native OS share sheet with WhatsApp, Email, etc.
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: "Evam Catering Quotation",
+          text: "Please find attached the catering menu quotation for your event."
+        });
+        return fileName;
+      } catch (err) {
+        // User cancelled - this is expected behavior, not an error
+        if ((err as Error).name === "AbortError") {
+          return fileName;
+        }
+        throw err;
+      }
+    }
+    
+    // Fallback: If Web Share API is not available, download the file
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return fileName;
   }
-  return uri;
+
+  // Native mobile share flow - opens share sheet with WhatsApp, Instagram, Email, etc.
+  const FileSystem = await import("expo-file-system");
+  const fileUri = FileSystem.cacheDirectory + fileName;
+  await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, {
+      mimeType: "application/pdf",
+      dialogTitle: "Share quotation via",
+      UTI: "com.adobe.pdf" // iOS needs this for WhatsApp, Email apps to recognize it as PDF
+    });
+  } else {
+    throw new Error("Sharing is not available on this device");
+  }
+  return fileUri;
 }
 
 export async function downloadQuotationPdf(
@@ -281,130 +359,10 @@ export async function downloadQuotationPdf(
   headings: Heading[],
   selected: SelectedDish[]
 ) {
+  const { bytes, fileName, base64Data } = await generatePdfBytes(customer, headings, selected);
+
   if (Platform.OS === "web") {
-    const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
-    const fileName = makeFileName(customer);
-
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595.28, 841.89]);
-    const regular = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-    const bold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-    const emerald = rgb(0.027, 0.247, 0.208);
-    const gold = rgb(0.839, 0.647, 0.118);
-    const muted = rgb(0.416, 0.467, 0.443);
-    const ivory = rgb(0.976, 0.969, 0.941);
-    const cream = rgb(1, 0.992, 0.969);
-    const border = rgb(0.851, 0.776, 0.553);
-
-    page.drawRectangle({ x: 0, y: 0, width: 595.28, height: 841.89, color: ivory });
-    page.drawRectangle({ x: 34, y: 34, width: 527.28, height: 773.89, color: cream, borderColor: border, borderWidth: 1 });
-
-    // Embed the logo image
-    const logoDataUrl = LOGO_BASE64;
-    const logoBase64 = logoDataUrl.replace(/^data:image\/png;base64,/, "");
-    const logoBytes = Uint8Array.from(atob(logoBase64), (c) => c.charCodeAt(0));
-    const logoImage = await pdfDoc.embedPng(logoBytes);
-    const logoDims = logoImage.scaleToFit(130, 65);
-
-    // ── Letterhead header ──────────────────────────────────────────
-    const headerTop = 790;
-
-    // Left: "FOOD MENU" large italic
-    const italic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
-    page.drawText("FOOD MENU", { x: 58, y: headerTop - 30, size: 28, font: italic, color: emerald });
-    // Underline beneath the title (thick green)
-    page.drawLine({ start: { x: 58, y: headerTop - 38 }, end: { x: 235, y: headerTop - 38 }, thickness: 2, color: emerald });
-    // Secondary thin line (gold)
-    page.drawLine({ start: { x: 58, y: headerTop - 42 }, end: { x: 235, y: headerTop - 42 }, thickness: 1, color: gold });
-
-    // Right: logo, then company details stacked
-    const logoX = 537 - logoDims.width;
-    page.drawImage(logoImage, { x: logoX, y: headerTop - logoDims.height + 10, width: logoDims.width, height: logoDims.height });
-
-    // Company name bold green
-    page.drawText("EVAM EVENT PLANNERS", { x: 537 - 140, y: headerTop - logoDims.height - 4, size: 8.5, font: bold, color: emerald });
-    // Contact details in gold
-    page.drawText("Guruvayur | 9946637535", { x: 537 - 120, y: headerTop - logoDims.height - 16, size: 8, font: regular, color: gold });
-    page.drawText("evam_event_planners | evameventplanners.in", { x: 537 - 168, y: headerTop - logoDims.height - 27, size: 7.5, font: regular, color: gold });
-
-    // Full-width divider
-    let y = headerTop - logoDims.height - 38;
-    page.drawLine({ start: { x: 58, y }, end: { x: 537, y }, thickness: 2, color: emerald });
-
-    y -= 42;
-    page.drawText(customer.eventName || "Menu Quotation", { x: 58, y, size: 20, font: bold, color: emerald });
-    page.drawText(customer.eventType || "Event Menu", { x: 420, y: y + 3, size: 10, font: bold, color: gold });
-
-    y -= 58;
-    page.drawRectangle({ x: 58, y: y - 4, width: 479, height: 76, color: ivory });
-    page.drawRectangle({ x: 58, y: y - 4, width: 5, height: 76, color: gold });
-    const details = [
-      ["Customer", customer.customerName || "-"],
-      ["Phone", customer.phoneNumber || "-"],
-      ["Date", customer.eventDate || "-"],
-      ["Guests", customer.guests || "-"],
-      ["Venue", customer.venue || "-"],
-      ["Notes", customer.notes || "-"]
-    ];
-    details.forEach(([label, value], index) => {
-      const col = index % 2;
-      const row = Math.floor(index / 2);
-      const x = col === 0 ? 78 : 310;
-      const detailY = y + 50 - row * 22;
-      page.drawText(`${label}:`, { x, y: detailY, size: 9, font: bold, color: muted });
-      page.drawText(value, { x: x + 48, y: detailY, size: 10, font: bold, color: emerald });
-    });
-
-    y -= 44;
-    const grouped = headings
-      .filter((heading) => heading.visible)
-      .sort((a, b) => a.displayOrder - b.displayOrder)
-      .map((heading) => ({
-        heading,
-        dishes: selected.filter((dish) => dish.headingId === heading.id)
-      }))
-      .filter((group) => group.dishes.length > 0);
-
-    if (!grouped.length) {
-      page.drawText("Selected menu items will appear here.", { x: 58, y, size: 12, font: regular, color: muted });
-    }
-
-    grouped.forEach(({ heading, dishes }) => {
-      if (y < 90) return;
-      page.drawText(heading.name, { x: 58, y, size: 15, font: bold, color: emerald });
-      y -= 8;
-      page.drawLine({ start: { x: 58, y }, end: { x: 537, y }, thickness: 0.8, color: border });
-      y -= 17;
-
-      dishes.forEach((dish) => {
-        if (y < 70) return;
-        const detail = [dish.name, dish.quantity ? `Qty: ${dish.quantity}` : "", dish.remarks ? `Remarks: ${dish.remarks}` : ""]
-          .filter(Boolean)
-          .join("  ");
-        wrapWords(detail, 74).forEach((line, lineIndex) => {
-          page.drawText(lineIndex === 0 ? `- ${line}` : `  ${line}`, {
-            x: 70,
-            y,
-            size: 11,
-            font: regular,
-            color: emerald
-          });
-          y -= 14;
-        });
-      });
-      y -= 8;
-    });
-
-    page.drawLine({ start: { x: 58, y: 72 }, end: { x: 537, y: 72 }, thickness: 0.8, color: border });
-    page.drawText("Prepared with care for your event. Final pricing may vary based on guest count, service style, and live counter requirements.", {
-      x: 58,
-      y: 55,
-      size: 8,
-      font: regular,
-      color: muted
-    });
-
-    const bytes = await pdfDoc.save();
+    // Web: Direct download to user's Downloads folder
     const pdfBuffer = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(pdfBuffer).set(bytes);
     const blob = new Blob([pdfBuffer], { type: "application/pdf" });
@@ -419,7 +377,42 @@ export async function downloadQuotationPdf(
     return fileName;
   }
 
-  const html = buildQuotationHtml(customer, headings, selected);
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
-  return uri;
+  // Native mobile download
+  const FileSystem = await import("expo-file-system");
+  
+  if (Platform.OS === "android") {
+    // Android: Save to Downloads folder using Storage Access Framework
+    const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+    if (permissions.granted) {
+      const uri = await FileSystem.StorageAccessFramework.createFileAsync(
+        permissions.directoryUri, 
+        fileName, 
+        "application/pdf"
+      );
+      await FileSystem.writeAsStringAsync(uri, base64Data, { 
+        encoding: FileSystem.EncodingType.Base64 
+      });
+      return uri;
+    } else {
+      throw new Error("Storage permission denied. Please grant access to save the file.");
+    }
+  }
+
+  // iOS: Save to app's document directory and open share sheet (iOS convention)
+  const fileUri = FileSystem.documentDirectory + fileName;
+  await FileSystem.writeAsStringAsync(fileUri, base64Data, { 
+    encoding: FileSystem.EncodingType.Base64 
+  });
+  
+  if (await Sharing.isAvailableAsync()) {
+    // iOS users download by choosing "Save to Files" from the share sheet
+    await Sharing.shareAsync(fileUri, {
+      mimeType: "application/pdf",
+      dialogTitle: "Save PDF",
+      UTI: "com.adobe.pdf" 
+    });
+  } else {
+    throw new Error("Cannot save file on this device");
+  }
+  return fileUri;
 }
