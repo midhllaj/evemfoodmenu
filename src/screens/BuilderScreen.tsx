@@ -4,7 +4,6 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal,
 import * as Sharing from "expo-sharing";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
-import { Field } from "../components/Field";
 import { categories } from "../data/seed";
 import { AppTheme } from "../theme/theme";
 import { Dish, Heading, SelectedDish } from "../types";
@@ -43,7 +42,6 @@ export function BuilderScreen({
   const [sectionAddOpen, setSectionAddOpen] = useState<Record<string, boolean>>({});
   const [sectionDishNames, setSectionDishNames] = useState<Record<string, string>>({});
   const [newHeading, setNewHeading] = useState("");
-  const [newDish, setNewDish] = useState({ name: "", category: "Kerala Sadya", headingId: "food-menu", price: "" });
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [pdfUri, setPdfUri] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -82,6 +80,10 @@ export function BuilderScreen({
   }
 
   async function openPreview() {
+    console.log("=== Preview clicked ===");
+    console.log("Selected dishes:", selectedDishesArray.length);
+    console.log("Customer:", customer);
+    
     if (!selectedDishesArray.length) {
       Alert.alert("No dishes selected", "Please select at least one dish to preview the PDF.");
       return;
@@ -101,7 +103,9 @@ export function BuilderScreen({
         setShowPreviewModal(false);
       }
     } catch (error) {
-      console.error("Preview error:", error);
+      console.error("=== Preview error ===");
+      console.error("Error:", error);
+      console.error("Stack:", error instanceof Error ? error.stack : "No stack");
       Alert.alert("Preview failed", error instanceof Error ? error.message : "Could not generate PDF preview.");
       setShowPreviewModal(false);
     } finally {
@@ -175,7 +179,16 @@ export function BuilderScreen({
       .filter((dish) => !dish.parentDishId) // Only show parent dishes or standalone dishes, not sub-dishes
       .filter((dish) => (query ? dish.name.toLowerCase().includes(query) || dish.category.toLowerCase().includes(query) : true))
       .filter((dish) => (selectedCategories.length ? selectedCategories.includes(dish.category) : true))
-      .sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        // Kerala Sadya parent dish always appears first
+        if (a.isParent && a.category === "Kerala Sadya") return -1;
+        if (b.isParent && b.category === "Kerala Sadya") return 1;
+        // Then sort by favorite status
+        const favoriteSort = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite));
+        if (favoriteSort !== 0) return favoriteSort;
+        // Finally sort alphabetically
+        return a.name.localeCompare(b.name);
+      });
   }, [dishes, globalSearch, selectedCategories]);
 
   function toggleDish(dish: Dish) {
@@ -204,20 +217,6 @@ export function BuilderScreen({
     };
     onHeadingsChange([...headings, heading]);
     setNewHeading("");
-  }
-
-  function addDish() {
-    const name = newDish.name.trim();
-    if (!name) return;
-    const dish: Dish = {
-      id: makeId("dish"),
-      name,
-      category: newDish.category,
-      headingId: newDish.headingId,
-      price: newDish.price
-    };
-    onDishesChange([...dishes, dish]);
-    setNewDish((current) => ({ ...current, name: "", price: "" }));
   }
 
   function addSectionDish(heading: Heading, headingDishes: Dish[]) {
@@ -323,23 +322,6 @@ export function BuilderScreen({
             </Pressable>
           ))}
         </View>
-      </View>
-
-      <View style={[styles.panel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-        <Text style={[styles.panelTitle, { color: theme.colors.text }]}>Add New Dish</Text>
-        <Field theme={theme} label="Dish Name" value={newDish.name} onChangeText={(name) => setNewDish({ ...newDish, name })} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {categories.slice(0, 14).map((category) => (
-            <Chip key={category} label={category} selected={newDish.category === category} theme={theme} onPress={() => setNewDish({ ...newDish, category })} />
-          ))}
-        </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {sortedHeadings.map((heading) => (
-            <Chip key={heading.id} label={heading.name} selected={newDish.headingId === heading.id} theme={theme} onPress={() => setNewDish({ ...newDish, headingId: heading.id })} />
-          ))}
-        </ScrollView>
-        <Field theme={theme} label="Price Optional" value={newDish.price} keyboardType="number-pad" onChangeText={(price) => setNewDish({ ...newDish, price })} />
-        <Button label="Save Dish Permanently" theme={theme} onPress={addDish} />
       </View>
 
       {sortedHeadings.map((heading) => {
