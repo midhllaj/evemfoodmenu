@@ -355,8 +355,8 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   logoImage: {
-    width: 180,
-    height: 70,
+    width: 220,
+    height: 180,
     alignSelf: "center"
   },
   brand: {

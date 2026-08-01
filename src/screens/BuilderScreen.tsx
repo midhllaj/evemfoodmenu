@@ -46,6 +46,10 @@ export function BuilderScreen({
   const [pdfUri, setPdfUri] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
+  const [addSubDishOpen, setAddSubDishOpen] = useState<Record<string, boolean>>({});
+  const [newSubDishName, setNewSubDishName] = useState<Record<string, string>>({});
+  const [editingHeadingId, setEditingHeadingId] = useState<string | null>(null);
+  const [editingHeadingName, setEditingHeadingName] = useState("");
 
   const sortedHeadings = useMemo(
     () => headings.filter((heading) => heading.visible).sort((a, b) => a.displayOrder - b.displayOrder),
@@ -296,6 +300,38 @@ export function BuilderScreen({
     setNewHeading("");
   }
 
+  function startEditHeading(heading: Heading) {
+    setEditingHeadingId(heading.id);
+    setEditingHeadingName(heading.name);
+  }
+
+  function cancelEditHeading() {
+    setEditingHeadingId(null);
+    setEditingHeadingName("");
+  }
+
+  function saveEditHeading(headingId: string) {
+    const name = editingHeadingName.trim();
+    if (!name) return;
+    onHeadingsChange(headings.map((item) => (item.id === headingId ? { ...item, name } : item)));
+    cancelEditHeading();
+  }
+
+  function addSubDishToParent(parentDish: Dish) {
+    const name = (newSubDishName[parentDish.id] ?? "").trim();
+    if (!name) return;
+    const newDish: Dish = {
+      id: makeId("dish"),
+      name,
+      category: parentDish.category,
+      headingId: parentDish.headingId,
+      parentDishId: parentDish.id
+    };
+    onDishesChange([...dishes, newDish]);
+    setNewSubDishName({ ...newSubDishName, [parentDish.id]: "" });
+    setAddSubDishOpen({ ...addSubDishOpen, [parentDish.id]: false });
+  }
+
   function addSectionDish(heading: Heading, headingDishes: Dish[]) {
     const name = (sectionDishNames[heading.id] ?? "").trim();
     if (!name) return;
@@ -405,9 +441,47 @@ export function BuilderScreen({
         const localQuery = (headingSearch[heading.id] ?? "").toLowerCase();
         const headingDishes = filteredDishes.filter((dish) => dish.headingId === heading.id && (!localQuery || dish.name.toLowerCase().includes(localQuery)));
         if (!headingDishes.length && globalSearch) return null;
+        const isEditingHeading = editingHeadingId === heading.id;
         return (
           <View key={heading.id} style={[styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{heading.name}</Text>
+            <View style={styles.sectionHeader}>
+              {isEditingHeading ? (
+                <>
+                  <TextInput
+                    value={editingHeadingName}
+                    onChangeText={setEditingHeadingName}
+                    autoFocus
+                    selectTextOnFocus
+                    placeholder="Heading name"
+                    placeholderTextColor={theme.colors.muted}
+                    style={[styles.headingEditInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                    onSubmitEditing={() => saveEditHeading(heading.id)}
+                  />
+                  <Pressable
+                    onPress={() => saveEditHeading(heading.id)}
+                    style={[styles.headingIconButton, { backgroundColor: theme.colors.primary }]}
+                  >
+                    <MaterialCommunityIcons name="check" size={18} color={theme.colors.white} />
+                  </Pressable>
+                  <Pressable
+                    onPress={cancelEditHeading}
+                    style={[styles.headingIconButton, { borderColor: theme.colors.border }]}
+                  >
+                    <MaterialCommunityIcons name="close" size={18} color={theme.colors.text} />
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{heading.name}</Text>
+                  <Pressable
+                    onPress={() => startEditHeading(heading)}
+                    style={[styles.headingIconButton, { borderColor: theme.colors.border }]}
+                  >
+                    <MaterialCommunityIcons name="pencil" size={18} color={theme.colors.text} />
+                  </Pressable>
+                </>
+              )}
+            </View>
             <TextInput
               value={headingSearch[heading.id] ?? ""}
               onChangeText={(value) => setHeadingSearch({ ...headingSearch, [heading.id]: value })}
@@ -519,6 +593,48 @@ export function BuilderScreen({
                       </Pressable>
                     );
                   })}
+                  
+                  {/* Add Sub-Dish UI for parent dishes when expanded */}
+                  {isParent && isExpanded && (
+                    addSubDishOpen[dish.id] ? (
+                      <View style={[styles.subDishRow, styles.subDishAddPanel, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+                        <View style={{ width: 28 }} />
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            value={newSubDishName[dish.id] ?? ""}
+                            onChangeText={(value) => setNewSubDishName({ ...newSubDishName, [dish.id]: value })}
+                            placeholder={`Add item to ${dish.name}`}
+                            placeholderTextColor={theme.colors.muted}
+                            style={[styles.subDishAddInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
+                          />
+                          <View style={styles.subDishAddActions}>
+                            <Button
+                              label="Cancel"
+                              theme={theme}
+                              variant="ghost"
+                              onPress={() => setAddSubDishOpen({ ...addSubDishOpen, [dish.id]: false })}
+                              style={styles.subDishAddButton}
+                            />
+                            <Button
+                              label="Add"
+                              theme={theme}
+                              onPress={() => addSubDishToParent(dish)}
+                              style={styles.subDishAddButton}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => setAddSubDishOpen({ ...addSubDishOpen, [dish.id]: true })}
+                        style={[styles.subDishRow, styles.addSubDishButton, { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentSoft }]}
+                      >
+                        <View style={{ width: 28 }} />
+                        <MaterialCommunityIcons name="plus" size={18} color={theme.colors.text} />
+                        <Text style={[styles.addSubDishText, { color: theme.colors.text }]}>Add Item</Text>
+                      </Pressable>
+                    )
+                  )}
                 </View>
               );
             })}
@@ -728,9 +844,33 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10
   },
+  sectionHeader: {
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
   sectionTitle: {
+    flex: 1,
     fontSize: 19,
     fontWeight: "900"
+  },
+  headingEditInput: {
+    flex: 1,
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 17,
+    fontWeight: "800"
+  },
+  headingIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
   },
   innerSearch: {
     minHeight: 44,
@@ -943,5 +1083,40 @@ const styles = StyleSheet.create({
     minWidth: 110,
     paddingHorizontal: 12,
     minHeight: 46
+  },
+  addSubDishButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingLeft: 34,
+    borderWidth: 1,
+    borderRadius: 6,
+    marginTop: 4
+  },
+  addSubDishText: {
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  subDishAddPanel: {
+    paddingVertical: 10,
+    paddingRight: 10,
+    gap: 8
+  },
+  subDishAddInput: {
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    fontSize: 13
+  },
+  subDishAddActions: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 6
+  },
+  subDishAddButton: {
+    flex: 1,
+    minHeight: 38
   }
 });

@@ -123,11 +123,13 @@ export function buildQuotationHtml(
           align-items: flex-end;
           gap: 4px;
           flex-shrink: 0;
+          min-width: 145px;
         }
         .brand-logo {
-          height: 55px;
-          width: auto;
+          width: 132px;
+          height: 76px;
           display: block;
+          object-fit: contain;
         }
         .company-name {
           margin: 0;
@@ -205,14 +207,8 @@ export function buildQuotationHtml(
         ul {
           margin: 0;
           padding: 0;
-          columns: 2;
-          column-gap: 20px;
-        }
-        @media (max-width: 450px) {
-          ul {
-            columns: 1;
-            column-gap: 0;
-          }
+          columns: 1;
+          column-gap: 0;
         }
         li {
           list-style: none;
