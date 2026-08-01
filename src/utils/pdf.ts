@@ -16,6 +16,26 @@ const makeFileName = (customer: CustomerDetails) => {
   return `${base.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "evam-quotation"}.pdf`;
 };
 
+const renderDish = (dish: SelectedDish) => `<li>
+  <span>${escapeHtml(dish.name)}</span>
+  ${dish.quantity ? `<small>Qty: ${escapeHtml(dish.quantity)}</small>` : ""}
+  ${dish.remarks ? `<em>${escapeHtml(dish.remarks)}</em>` : ""}
+</li>`;
+
+const renderDishList = (dishes: SelectedDish[]) => {
+  const sadyaDishes = dishes.filter((dish) => dish.category === "Kerala Sadya");
+  const otherDishes = dishes.filter((dish) => dish.category !== "Kerala Sadya");
+
+  return `
+    ${
+      sadyaDishes.length
+        ? `<h3 class="menu-subheading">Kerala Sadya</h3><ul>${sadyaDishes.map(renderDish).join("")}</ul>`
+        : ""
+    }
+    ${otherDishes.length ? `<ul>${otherDishes.map(renderDish).join("")}</ul>` : ""}
+  `;
+};
+
 export function buildQuotationHtml(
   customer: CustomerDetails,
   headings: Heading[],
@@ -35,17 +55,7 @@ export function buildQuotationHtml(
       ({ heading, dishes }) => `
       <section class="menu-section">
         <h2>${escapeHtml(heading.name)}</h2>
-        <ul>
-          ${dishes
-            .map(
-              (dish) => `<li>
-                <span>${escapeHtml(dish.name)}</span>
-                ${dish.quantity ? `<small>Qty: ${escapeHtml(dish.quantity)}</small>` : ""}
-                ${dish.remarks ? `<em>${escapeHtml(dish.remarks)}</em>` : ""}
-              </li>`
-            )
-            .join("")}
-        </ul>
+        ${renderDishList(dishes)}
       </section>`
     )
     .join("");
@@ -195,6 +205,8 @@ export function buildQuotationHtml(
         .menu-section {
           margin: 14px 0;
           flex: 0 0 auto;
+          break-inside: auto;
+          page-break-inside: auto;
         }
         .menu-section h2 {
           margin: 0 0 8px;
@@ -203,6 +215,19 @@ export function buildQuotationHtml(
           color: #073F35;
           font-size: 15px;
           font-weight: 700;
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+        .menu-subheading {
+          margin: 0 0 7px;
+          color: #073F35;
+          font-size: 10px;
+          font-weight: 700;
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+        .menu-section ul + ul {
+          margin-top: 10px;
         }
         ul {
           margin: 0;
@@ -211,10 +236,15 @@ export function buildQuotationHtml(
           column-gap: 0;
         }
         li {
+          display: inline-block;
+          width: 100%;
           list-style: none;
           margin: 0 0 6px;
           font-size: 11px;
           line-height: 1.5;
+          break-inside: avoid;
+          page-break-inside: avoid;
+          -webkit-column-break-inside: avoid;
         }
         li::before {
           content: "•";
