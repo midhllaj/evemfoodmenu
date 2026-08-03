@@ -50,10 +50,16 @@ export function BuilderScreen({
   const [newSubDishName, setNewSubDishName] = useState<Record<string, string>>({});
   const [editingHeadingId, setEditingHeadingId] = useState<string | null>(null);
   const [editingHeadingName, setEditingHeadingName] = useState("");
+  const [draggingHeadingId, setDraggingHeadingId] = useState<string | null>(null);
+
+  const orderedHeadings = useMemo(
+    () => [...headings].sort((a, b) => a.displayOrder - b.displayOrder),
+    [headings]
+  );
 
   const sortedHeadings = useMemo(
-    () => headings.filter((heading) => heading.visible).sort((a, b) => a.displayOrder - b.displayOrder),
-    [headings]
+    () => orderedHeadings.filter((heading) => heading.visible),
+    [orderedHeadings]
   );
 
   const selectedDishesArray = useMemo(() => Object.values(selectedDishes), [selectedDishes]);
@@ -317,6 +323,32 @@ export function BuilderScreen({
     cancelEditHeading();
   }
 
+  function applyHeadingOrder(nextOrder: Heading[]) {
+    const ordered = nextOrder.map((heading, index) => ({ ...heading, displayOrder: index + 1 }));
+    onHeadingsChange(ordered);
+  }
+
+  function reorderHeading(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const next = [...orderedHeadings];
+    const sourceIndex = next.findIndex((heading) => heading.id === sourceId);
+    const targetIndex = next.findIndex((heading) => heading.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const [moved] = next.splice(sourceIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    applyHeadingOrder(next);
+  }
+
+  function moveHeading(headingId: string, direction: -1 | 1) {
+    const currentIndex = orderedHeadings.findIndex((heading) => heading.id === headingId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedHeadings.length) return;
+    const next = [...orderedHeadings];
+    const [moved] = next.splice(currentIndex, 1);
+    next.splice(nextIndex, 0, moved);
+    applyHeadingOrder(next);
+  }
+
   function addSubDishToParent(parentDish: Dish) {
     const name = (newSubDishName[parentDish.id] ?? "").trim();
     if (!name) return;
@@ -425,15 +457,64 @@ export function BuilderScreen({
           <Button label="Save" theme={theme} onPress={addHeading} style={styles.smallButton} />
         </View>
         <View style={styles.headingList}>
-          {headings.map((heading) => (
-            <Pressable
-              key={heading.id}
-              onPress={() => onHeadingsChange(headings.map((item) => (item.id === heading.id ? { ...item, visible: !item.visible } : item)))}
-              style={[styles.headingPill, { borderColor: theme.colors.border, backgroundColor: heading.visible ? theme.colors.accentSoft : "transparent" }]}
-            >
-              <Text style={[styles.headingPillText, { color: theme.colors.text }]}>{heading.name}</Text>
-            </Pressable>
-          ))}
+          {orderedHeadings.map((heading, index) => {
+            const webDragProps =
+              Platform.OS === "web"
+                ? ({
+                    draggable: true,
+                    onDragStart: () => setDraggingHeadingId(heading.id),
+                    onDragOver: (event: any) => event.preventDefault(),
+                    onDrop: (event: any) => {
+                      event.preventDefault();
+                      if (draggingHeadingId) {
+                        reorderHeading(draggingHeadingId, heading.id);
+                      }
+                      setDraggingHeadingId(null);
+                    },
+                    onDragEnd: () => setDraggingHeadingId(null)
+                  } as any)
+                : {};
+
+            return (
+              <View
+                key={heading.id}
+                style={[
+                  styles.headingPill,
+                  {
+                    borderColor: draggingHeadingId === heading.id ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: heading.visible ? theme.colors.accentSoft : "transparent",
+                    opacity: heading.visible ? 1 : 0.55
+                  }
+                ]}
+                {...webDragProps}
+              >
+                <Text style={[styles.headingOrderNumber, { color: theme.colors.text }]}>{index + 1}</Text>
+                <MaterialCommunityIcons name="drag" size={16} color={theme.colors.muted} />
+                <Pressable
+                  onPress={() => onHeadingsChange(headings.map((item) => (item.id === heading.id ? { ...item, visible: !item.visible } : item)))}
+                  style={styles.headingPillLabel}
+                >
+                  <Text style={[styles.headingPillText, { color: theme.colors.text }]}>{heading.name}</Text>
+                </Pressable>
+                <View style={styles.headingMoveControls}>
+                  <Pressable
+                    onPress={() => moveHeading(heading.id, -1)}
+                    disabled={index === 0}
+                    style={styles.headingMoveButton}
+                  >
+                    <MaterialCommunityIcons name="chevron-left" size={16} color={index === 0 ? theme.colors.muted : theme.colors.text} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => moveHeading(heading.id, 1)}
+                    disabled={index === orderedHeadings.length - 1}
+                    style={styles.headingMoveButton}
+                  >
+                    <MaterialCommunityIcons name="chevron-right" size={16} color={index === orderedHeadings.length - 1 ? theme.colors.muted : theme.colors.text} />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
         </View>
       </View>
 
@@ -831,12 +912,42 @@ const styles = StyleSheet.create({
   headingPill: {
     borderWidth: 1,
     borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8
+  },
+  headingPillLabel: {
+    minHeight: 24,
+    justifyContent: "center"
+  },
+  headingOrderNumber: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    overflow: "hidden",
+    backgroundColor: "rgba(7, 63, 53, 0.12)",
+    fontSize: 11,
+    fontWeight: "900",
+    lineHeight: 18,
+    textAlign: "center"
   },
   headingPillText: {
     fontWeight: "800",
     fontSize: 12
+  },
+  headingMoveControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2
+  },
+  headingMoveButton: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6
   },
   section: {
     borderRadius: 8,
