@@ -263,19 +263,21 @@ export function BuilderScreen({
   const filteredDishes = useMemo(() => {
     const query = globalSearch.trim().toLowerCase();
     return dishes
-      .filter((dish) => !dish.parentDishId) // Only show parent dishes or standalone dishes, not sub-dishes
-      .filter((dish) => (query ? dish.name.toLowerCase().includes(query) || dish.category.toLowerCase().includes(query) : true))
-      .filter((dish) => (selectedCategories.length ? selectedCategories.includes(dish.category) : true))
+      .map((dish, index) => ({ dish, index }))
+      .filter(({ dish }) => !dish.parentDishId) // Only show parent dishes or standalone dishes, not sub-dishes
+      .filter(({ dish }) => (query ? dish.name.toLowerCase().includes(query) || dish.category.toLowerCase().includes(query) : true))
+      .filter(({ dish }) => (selectedCategories.length ? selectedCategories.includes(dish.category) : true))
       .sort((a, b) => {
         // Kerala Sadya parent dish always appears first
-        if (a.isParent && a.category === "Kerala Sadya") return -1;
-        if (b.isParent && b.category === "Kerala Sadya") return 1;
+        if (a.dish.isParent && a.dish.category === "Kerala Sadya") return -1;
+        if (b.dish.isParent && b.dish.category === "Kerala Sadya") return 1;
         // Then sort by favorite status
-        const favoriteSort = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite));
+        const favoriteSort = Number(Boolean(b.dish.favorite)) - Number(Boolean(a.dish.favorite));
         if (favoriteSort !== 0) return favoriteSort;
-        // Finally sort alphabetically
-        return a.name.localeCompare(b.name);
-      });
+        // Keep original list order so newly added items stay at the bottom.
+        return a.index - b.index;
+      })
+      .map(({ dish }) => dish);
   }, [dishes, globalSearch, selectedCategories]);
 
   function toggleDish(dish: Dish) {
@@ -364,13 +366,13 @@ export function BuilderScreen({
     setAddSubDishOpen({ ...addSubDishOpen, [parentDish.id]: false });
   }
 
-  function addSectionDish(heading: Heading, headingDishes: Dish[]) {
+  function addSectionDish(heading: Heading) {
     const name = (sectionDishNames[heading.id] ?? "").trim();
     if (!name) return;
     const dish: Dish = {
       id: makeId("dish"),
       name,
-      category: headingDishes[0]?.category ?? "Custom",
+      category: heading.name,
       headingId: heading.id
     };
     onDishesChange([...dishes, dish]);
@@ -739,7 +741,7 @@ export function BuilderScreen({
                   <Button
                     label="Save Item"
                     theme={theme}
-                    onPress={() => addSectionDish(heading, headingDishes)}
+                    onPress={() => addSectionDish(heading)}
                     style={styles.sectionAddButton}
                   />
                 </View>

@@ -22,9 +22,10 @@ const renderDish = (dish: SelectedDish) => `<li>
   ${dish.remarks ? `<em>${escapeHtml(dish.remarks)}</em>` : ""}
 </li>`;
 
-const renderDishList = (dishes: SelectedDish[]) => {
-  const sadyaDishes = dishes.filter((dish) => dish.category === "Kerala Sadya");
-  const otherDishes = dishes.filter((dish) => dish.category !== "Kerala Sadya");
+const renderDishList = (heading: Heading, dishes: SelectedDish[]) => {
+  const shouldGroupSadya = heading.name.trim().toLowerCase() === "food menu";
+  const sadyaDishes = shouldGroupSadya ? dishes.filter((dish) => dish.category === "Kerala Sadya") : [];
+  const otherDishes = shouldGroupSadya ? dishes.filter((dish) => dish.category !== "Kerala Sadya") : dishes;
 
   return `
     ${
@@ -55,7 +56,7 @@ export function buildQuotationHtml(
       ({ heading, dishes }) => `
       <section class="menu-section">
         <h2>${escapeHtml(heading.name)}</h2>
-        ${renderDishList(dishes)}
+        ${renderDishList(heading, dishes)}
       </section>`
     )
     .join("");
