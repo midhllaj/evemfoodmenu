@@ -394,10 +394,21 @@ export function BuilderScreen({
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => onDishesChange(dishes.filter((item) => item.id !== dish.id))
+        onPress: () => deleteDish(dish)
       },
       { text: "Cancel", style: "cancel" }
     ]);
+  }
+
+  function deleteDish(dish: Dish) {
+    const childIds = dishes.filter((item) => item.parentDishId === dish.id).map((item) => item.id);
+    const idsToDelete = new Set([dish.id, ...childIds]);
+    const nextSelected = { ...selectedDishes };
+    idsToDelete.forEach((id) => {
+      delete nextSelected[id];
+    });
+    onSelectedChange(nextSelected);
+    onDishesChange(dishes.filter((item) => !idsToDelete.has(item.id)));
   }
 
   function toggleCategory(category: string) {
@@ -636,6 +647,12 @@ export function BuilderScreen({
                         </View>
                       ) : null}
                     </View>
+                    <Pressable
+                      onPress={() => deleteDish(dish)}
+                      style={[styles.deleteButton, { borderColor: theme.colors.border }]}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={18} color="#B42318" />
+                    </Pressable>
                   </Pressable>
                   
                   {/* Sub-dishes */}
@@ -673,6 +690,12 @@ export function BuilderScreen({
                             </View>
                           ) : null}
                         </View>
+                        <Pressable
+                          onPress={() => deleteDish(subDish)}
+                          style={[styles.deleteButton, { borderColor: theme.colors.border }]}
+                        >
+                          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#B42318" />
+                        </Pressable>
                       </Pressable>
                     );
                   })}
@@ -995,6 +1018,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 11,
     paddingVertical: 10
+  },
+  deleteButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1
   },
   subDishRow: {
     paddingLeft: 10,
